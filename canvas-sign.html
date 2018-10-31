@@ -1,0 +1,244 @@
+<!doctype html>
+<html lang="zh-cn">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport"
+        content="width=device-width, user-scalable=no, initial-scale=1.0, maximum-scale=1.0, minimum-scale=1.0">
+  <meta http-equiv="X-UA-Compatible" content="ie=edge">
+  <title>canvas签名</title>
+  <style>
+    .canvas-control {
+      display: flex;
+      justify-content: center;
+      margin-top: 20px;
+    }
+
+    .canvas-control a {
+      text-decoration: none;
+      color: #444444;
+      width: 60px;
+      height: 30px;
+      background: #efefef;
+      text-align: center;
+      line-height: 30px;
+    }
+
+    .canvas-control a:last-child {
+      margin-left: 50px;
+    }
+
+    .draw-con {
+      border: 1px solid red;
+      margin: 0 auto;
+      position: relative;
+      font-size: 100px;
+      text-align: center;
+      color: rgba(120,120,120, .1);
+      letter-spacing: 50px;
+      padding-left: 50px;
+      box-sizing: border-box;
+    }
+
+    #canvas {
+      position: absolute;
+      left: 1px;
+      top: 1px;
+      margin: 0 auto;
+      background: transparent;
+    }
+  </style>
+</head>
+<body>
+<div id="app">
+  <div class="canvas-wrap">
+    <div class="draw-con" id="draw-con">
+      签名
+      <canvas id="canvas">
+        当前浏览器不支持canvas
+      </canvas>
+    </div>
+    <div class="canvas-control">
+      <a href="javascrit:;" id="clearSign">清除</a>
+      <a href="javascrit:;" id="saveSign">保存</a>
+    </div>
+  </div>
+
+</div>
+</body>
+<script>
+
+  var ismouseDown = false;
+  var strokeDistance;
+  var strokeTime;
+
+  var currentLineWith;
+  var currentStamp = 0;
+  var currentLocation = null;
+
+  var lastLineWidth = -1;
+  var lastTimeStamp = 0;
+  var lastLocation = null;
+
+  var maxLineWidth = 5;
+  var minLineWidth = 1;
+  var maxStrokeV = 10;
+  var minStrokeV = 0.1
+
+
+  var canvas = document.getElementById('canvas');
+  var canvasW = canvas.width = Math.min(450, window.innerWidth - 20);
+  var canvasH = canvas.height = canvasW / 2;
+  var ctx = canvas.getContext('2d');
+
+  document.getElementById('draw-con').style.width = canvasW + 2 + 'px';
+  document.getElementById('draw-con').style.height = canvasH + 2 + 'px';
+  document.getElementById('draw-con').style.lineHeight = canvasH + 2 + 'px';
+
+  // pc端
+  canvas.addEventListener('mousedown', function (e) {
+    e.preventDefault();
+    beginStroke({x: e.clientX, y: e.clientY});
+  });
+  canvas.addEventListener('mouseup', function (e) {
+    e.preventDefault();
+    endStroke()
+  });
+  canvas.addEventListener('mousemove', function (e) {
+    e.preventDefault();
+    moveStroke({x: e.clientX, y: e.clientY});
+  });
+  canvas.addEventListener('mouseout', function (e) {
+    e.preventDefault();
+    endStroke()
+  });
+
+
+  // 移动端
+  canvas.addEventListener('touchstart', function (e) {
+    e.preventDefault();
+    var touch = e.touches[0];
+    beginStroke({x: touch.pageX, y: touch.pageY});
+  });
+  canvas.addEventListener('touchmove', function (e) {
+    e.preventDefault();
+    var touch = e.touches[0];
+    moveStroke({x: touch.pageX, y: touch.pageY});
+  });
+  canvas.addEventListener('touchend', function (e) {
+    e.preventDefault();
+    endStroke();
+  });
+
+  // 清除签名
+  document.getElementById('clearSign').addEventListener('click',function (e) {
+    ctx.clearRect( 0 , 0 , canvas.width, canvas.height );
+  })
+
+  // 保存签名
+  document.getElementById('saveSign').addEventListener('click',function (e) {
+    var dataurl = canvas.toDataURL('image/png');
+    var a = document.createElement('a');
+    a.href = dataurl;
+    a.download = "sign";
+    a.click();
+  })
+
+
+
+  function beginStroke(point) {
+    ismouseDown = true;
+    lastLocation = windowToCanvas(point.x, point.y);
+    lastTimeStamp = +new Date();
+  }
+
+  function moveStroke(point) {
+    if (ismouseDown) {
+      currentLocation = windowToCanvas(point.x, point.y);
+      currentStamp = +new Date();
+      strokeDistance = calcDistance(currentLocation, lastLocation);
+      strokeTime = currentStamp = lastTimeStamp;
+      currentLineWith = calcLineWidth(strokeTime, strokeDistance);
+
+      ctx.beginPath();
+      ctx.moveTo(lastLocation.x, lastLocation.y);
+      ctx.lineTo(currentLocation.x, currentLocation.y);
+      ctx.strokeStyle = 'black';
+      ctx.lineWidth = currentLineWith;
+      ctx.lineCap = 'round';
+      ctx.lineJoin = 'round';
+      ctx.stroke();
+      lastLocation = currentLocation;
+      lastTimeStamp = currentStamp;
+      lastLineWidth = currentLineWith;
+    }
+  }
+
+  function endStroke() {
+    ismouseDown = false;
+  }
+
+
+  // 根据手势或鼠标移动速度动态控制线宽
+  function calcLineWidth(t, s) {
+    var v = s / t;
+    var reusltLineWidth;
+    if (v < 0.1) {
+      reusltLineWidth = maxLineWidth;
+    } else if (v > 10) {
+      reusltLineWidth = minLineWidth;
+    } else {
+      reusltLineWidth = maxLineWidth - (v - minStrokeV) / (maxStrokeV - minStrokeV) * (maxLineWidth - minLineWidth);
+    }
+    if (lastLineWidth === -1) {
+      return reusltLineWidth;
+    }
+    return lastLineWidth * 2 / 3 + reusltLineWidth * 1 / 3;
+  }
+
+  // 两点之间距离
+  function calcDistance(loc1, loc2) {
+    return Math.sqrt((loc1.x - loc2.x) * (loc1.x - loc2.x) + (loc1.y - loc2.y) * (loc1.y - loc2.y))
+  }
+
+  // 坐标转换
+  function windowToCanvas(x, y) {
+    var bbox = canvas.getBoundingClientRect();
+    return {
+      x: Math.round(x - bbox.left),
+      y: Math.round(y - bbox.top)
+    }
+  }
+
+
+  // 绘制田字格
+  /*  function drawGrid() {
+   ctx.save();
+   ctx.strokeStyle = 'red';
+
+   ctx.beginPath();
+   ctx.moveTo(3, 3);
+   ctx.lineTo(canvasW - 3, 3);
+   ctx.lineTo(canvasW - 3, canvasH - 3);
+   ctx.lineTo(3, canvasH - 3);
+   ctx.closePath();
+   ctx.lineWidth = 6;
+   ctx.stroke();
+
+   ctx.beginPath();
+   ctx.moveTo(0, 0);
+   ctx.lineTo(canvasW, canvasH);
+   ctx.moveTo(canvasW, 0);
+   ctx.lineTo(0, canvasH);
+   ctx.moveTo(0, canvasH / 2);
+   ctx.lineTo(canvasW, canvasH / 2);
+   ctx.moveTo(canvasW / 2, 0);
+   ctx.lineTo(canvasW / 2, canvasH);
+   ctx.closePath();
+   ctx.lineWidth = 1;
+   ctx.stroke();
+   ctx.restore();
+   }*/
+
+
+</script>
+</html>
